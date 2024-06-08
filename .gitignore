@@ -1,0 +1,15 @@
+# Ignore compiled files
+*.o
+*.out
+
+# Ignore build artifacts
+target/
+Cargo.lock
+
+# Ignore editor and IDE files
+.vscode/
+.idea/
+
+# Ignore system files
+.DS_Store
+Thumbs.db
