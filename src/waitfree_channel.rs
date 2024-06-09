@@ -21,9 +21,9 @@ impl<T> AtomicChannel<T> {
 
     /// Returns a reader for the channel.
     pub fn get_reader(&mut self) -> AtomicChannelReader<T> {
-            AtomicChannelReader {
-                ptr: AtomicPtr::new(self.ptr.load(Ordering::Acquire))
-            }
+        AtomicChannelReader {
+            channel: self
+        }
     }
     
     /// Returns a writer for the channel.
@@ -36,7 +36,7 @@ impl<T> AtomicChannel<T> {
 
 /// A reader for the `AtomicChannel`.
 pub struct AtomicChannelReader<T> {
-    ptr: AtomicPtr<T>
+    channel: *mut AtomicChannel<T>
 }
 
 impl <T> AtomicChannelReader<T> {
@@ -44,8 +44,13 @@ impl <T> AtomicChannelReader<T> {
     /// Returns a reference to the value.
     /// If the channel is empty, the function will return `None`.
     /// The value will be removed from the channel.
-    pub fn recv(&self) -> &mut T {
-        unsafe{ &mut *(self.ptr.swap(std::ptr::null_mut(), Ordering::Acquire)) }
+    pub fn recv(&self) -> Option<&mut T> {
+        let channel = unsafe{ &mut *self.channel };
+        let val = channel.ptr.swap(std::ptr::null_mut(), Ordering::Acquire);
+        if val.is_null() {
+            return None;
+        }
+        unsafe{ Some(&mut *(val)) }
     }
 }
 
@@ -79,6 +84,17 @@ unsafe impl<T> Send for AtomicChannelWriter<T> {}
 mod tests {
     use std::sync::atomic::AtomicBool;
     use super::*;
+
+    #[test]
+    fn basics() {
+        let mut channel = AtomicChannel::<i32>::new();
+        let reader = channel.get_reader();
+        let writer = channel.get_writer();
+
+        assert_eq!(writer.send(123), true);
+        assert_eq!(reader.recv(), Some(&mut 123));
+        assert_eq!(reader.recv(), None);
+    }
 
     #[test]
     fn benchmark() {
