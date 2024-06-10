@@ -2,45 +2,70 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A wait-free queue that can be used to send and receive values between threads.
 pub struct WaitFreeQueue<T: Copy, const SIZE: usize> {
-    buffer: [Option<T>; SIZE],
     read_sequence: AtomicUsize,
-    write_sequence: AtomicUsize
+    read_sequence_cached: usize,
+    write_sequence: AtomicUsize,
+    write_sequence_cached: usize,
+    buffer: [Option<T>; SIZE],
+}
+
+fn get_next_index(value: usize, max: usize) -> usize {
+    if value + 1 == max {
+        0
+    } else {
+        value + 1
+    }
 }
 
 /// A wait-free queue that can be used to send and receive values between threads.
 impl<T: Copy, const SIZE: usize> WaitFreeQueue<T, SIZE> {
+
+    fn get_read_index(&mut self, next_write_index: usize) -> usize {
+        if self.read_sequence_cached == next_write_index {
+            self.read_sequence_cached = self.read_sequence.load(Ordering::Acquire);
+        }
+        self.read_sequence_cached
+    }
+
+    fn get_write_index(&mut self, next_read_index: usize) -> usize {
+        if self.write_sequence_cached == next_read_index {
+            self.write_sequence_cached = self.write_sequence.load(Ordering::Acquire);
+        }
+        self.write_sequence_cached
+    }
+
     /// Creates a new `WaitFreeQueue`.
     pub fn new() -> Self {
         WaitFreeQueue {
             buffer: [None; SIZE],
             read_sequence: AtomicUsize::new(0),
-            write_sequence: AtomicUsize::new(1)
+            read_sequence_cached: 0,
+            write_sequence: AtomicUsize::new(0),
+            write_sequence_cached: 0,
         }
     }
 
     /// Tries to write a value to the queue.
     pub fn try_write(&mut self, value: T) -> bool {
-        let next_write_index = self.write_sequence.load(Ordering::SeqCst) % SIZE;
-        let current_read_index = self.read_sequence.load(Ordering::SeqCst) % SIZE;
-        let no_room_left = current_read_index == next_write_index;
-        if no_room_left {
+        let write_index = self.write_sequence.load(Ordering::Relaxed);
+        let next_write_index = get_next_index(write_index, SIZE);
+        if next_write_index == self.get_read_index(next_write_index) {
             return false;
         }
-        self.buffer[next_write_index % SIZE] = Some(value);
-        self.write_sequence.store(next_write_index + 1, Ordering::SeqCst);
+        self.buffer[write_index] = Some(value);
+        self.write_sequence.store(next_write_index, Ordering::Release);
         true
     }
 
     /// Tries to read a value from the queue.
     pub fn try_read(&mut self) -> Option<&mut T> {
-        let next_read_index = (self.read_sequence.load(Ordering::SeqCst) + 1) % SIZE;
-        let next_write_index = self.write_sequence.load(Ordering::SeqCst) % SIZE;
-        let no_value_to_read = next_read_index == next_write_index;
-        if no_value_to_read {
+        let read_index = self.read_sequence.load(Ordering::Relaxed);
+        if read_index == self.get_write_index(read_index) {
             return None;
         }
-        self.read_sequence.store(next_read_index, Ordering::SeqCst);
-        Some(self.buffer[next_read_index].as_mut().unwrap())
+        let result = self.buffer[read_index].as_mut().unwrap();
+        self.read_sequence.store(get_next_index(read_index, SIZE), Ordering::Release);
+        Some(result)
     }
 }
 
@@ -81,9 +106,9 @@ mod tests {
     }
 
     #[test]
-    fn benchmarks() {
+    fn benchmark_queue() {
         let running = AtomicBool::new(true);
-        let mut queue = WaitFreeQueue::<i64, 64>::new();
+        let mut queue = WaitFreeQueue::<i64, 65536>::new();
 
         let reader_running = unsafe{ AtomicBool::from_ptr(running.as_ptr()) };
         let mut reader_sneaker = ThreadSneaker::new(&mut queue);

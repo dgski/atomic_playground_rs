@@ -97,7 +97,7 @@ mod tests {
     }
 
     #[test]
-    fn benchmark() {
+    fn benchmark_channel() {
         let running = AtomicBool::new(true);
         let mut channel = AtomicChannel::<i32>::new();
 
