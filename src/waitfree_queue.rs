@@ -1,7 +1,7 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{array, sync::atomic::{AtomicUsize, Ordering}};
 
 /// A wait-free queue that can be used to send and receive values between threads.
-pub struct WaitFreeQueue<T: Copy, const SIZE: usize> {
+pub struct WaitFreeQueue<T, const SIZE: usize> {
     read_sequence: AtomicUsize,
     read_sequence_cached: usize,
     write_sequence: AtomicUsize,
@@ -18,7 +18,7 @@ fn get_next_index(value: usize, max: usize) -> usize {
 }
 
 /// A wait-free queue that can be used to send and receive values between threads.
-impl<T: Copy, const SIZE: usize> WaitFreeQueue<T, SIZE> {
+impl<T, const SIZE: usize> WaitFreeQueue<T, SIZE> {
 
     fn get_read_index(&mut self, next_write_index: usize) -> usize {
         if self.read_sequence_cached == next_write_index {
@@ -37,7 +37,7 @@ impl<T: Copy, const SIZE: usize> WaitFreeQueue<T, SIZE> {
     /// Creates a new `WaitFreeQueue`.
     pub fn new() -> Self {
         WaitFreeQueue {
-            buffer: [None; SIZE],
+            buffer: array::from_fn(|_| None),
             read_sequence: AtomicUsize::new(0),
             read_sequence_cached: 0,
             write_sequence: AtomicUsize::new(0),
