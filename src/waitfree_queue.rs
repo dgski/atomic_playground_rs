@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn benchmark_queue() {
         let running = AtomicBool::new(true);
-        let mut queue = Box::new(WaitFreeQueue::<i64, 65536>::new());
+        let mut queue = Box::new(WaitFreeQueue::<i64, 1024>::new());
 
         let reader_running = unsafe{ AtomicBool::from_ptr(running.as_ptr()) };
         let mut reader_sneaker = ThreadSneaker::new(&mut queue);
