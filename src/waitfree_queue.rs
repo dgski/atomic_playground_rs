@@ -68,9 +68,9 @@ impl<T, const SIZE: usize> WaitFreeQueue<T, SIZE> {
         if read_index == self.get_write_index(read_index) {
             return None;
         }
-        let result = self.buffer[read_index].value.as_mut().unwrap();
+        let result = self.buffer[read_index].value.as_mut();
         self.read_sequence.value.store(get_next_index(read_index, SIZE), Ordering::Release);
-        Some(result)
+        result
     }
 }
 
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn benchmark_queue() {
         let running = AtomicBool::new(true);
-        let mut queue = Box::new(WaitFreeQueue::<i64, 1024>::new());
+        let mut queue = Box::new(WaitFreeQueue::<i64, 2048>::new());
 
         let reader_running = unsafe{ CachePadded{ value: AtomicBool::from_ptr(running.as_ptr()) } };
         let mut reader_sneaker = ThreadSneaker::new(&mut queue);
