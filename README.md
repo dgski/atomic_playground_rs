@@ -11,5 +11,5 @@ Strengthening my atomic operation knowledge with some hands-on coding.
     - Average time to read: 22 ns, total reads: 203,991,606.
     - Average time to write: 36 ns, total writes: 156,541,568.
 - [WaitFreeWorker](./src/waitfree_worker.rs): Single background thread worker that leverages wait-free queues to allow rapid scheduling of tasks and subsequent callbacks. Results on M1 Macbook Air:
-    - Average posting time: 78 ns.
-    - Average polling time: 31 ns.
+    - Average posting time: 64 ns.
+    - Average polling time: 26 ns.
