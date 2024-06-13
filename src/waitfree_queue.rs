@@ -1,4 +1,4 @@
-use std::{array, sync::atomic::{AtomicUsize, Ordering}};
+use std::{array, ops::Add, sync::atomic::{AtomicUsize, Ordering}};
 
 #[repr(align(64))]
 struct CachePadded<T>{
@@ -14,17 +14,15 @@ pub struct WaitFreeQueue<T, const SIZE: usize> {
     buffer: [CachePadded<Option<T>>; SIZE],
 }
 
+#[inline(always)]
 fn get_next_index(value: usize, max: usize) -> usize {
-    if value + 1 == max {
-        0
-    } else {
-        value + 1
-    }
+    value.add(1) % max
 }
 
 /// A wait-free queue that can be used to send and receive values between threads.
 impl<T, const SIZE: usize> WaitFreeQueue<T, SIZE> {
 
+    #[inline(always)]
     fn get_read_index(&mut self, next_write_index: usize) -> usize {
         if self.read_sequence_cached.value == next_write_index {
             self.read_sequence_cached.value = self.read_sequence.value.load(Ordering::Acquire);
@@ -32,6 +30,7 @@ impl<T, const SIZE: usize> WaitFreeQueue<T, SIZE> {
         self.read_sequence_cached.value
     }
 
+    #[inline(always)]
     fn get_write_index(&mut self, next_read_index: usize) -> usize {
         if self.write_sequence_cached.value == next_read_index {
             self.write_sequence_cached.value = self.write_sequence.value.load(Ordering::Acquire);
@@ -57,7 +56,7 @@ impl<T, const SIZE: usize> WaitFreeQueue<T, SIZE> {
         if next_write_index == self.get_read_index(next_write_index) {
             return false;
         }
-        self.buffer[write_index].value = Some(value);
+        unsafe{ self.buffer.get_unchecked_mut(write_index).value = Some(value); }
         self.write_sequence.value.store(next_write_index, Ordering::Release);
         true
     }
@@ -68,7 +67,7 @@ impl<T, const SIZE: usize> WaitFreeQueue<T, SIZE> {
         if read_index == self.get_write_index(read_index) {
             return None;
         }
-        let result = self.buffer[read_index].value.as_mut();
+        let result = unsafe { self.buffer.get_unchecked_mut(read_index).value.as_mut() };
         self.read_sequence.value.store(get_next_index(read_index, SIZE), Ordering::Release);
         result
     }
@@ -113,7 +112,7 @@ mod tests {
     #[test]
     fn benchmark_queue() {
         let running = AtomicBool::new(true);
-        let mut queue = Box::new(WaitFreeQueue::<i64, 2048>::new());
+        let mut queue = Box::new(WaitFreeQueue::<i32, 2048>::new());
 
         let reader_running = unsafe{ CachePadded{ value: AtomicBool::from_ptr(running.as_ptr()) } };
         let mut reader_sneaker = ThreadSneaker::new(&mut queue);
